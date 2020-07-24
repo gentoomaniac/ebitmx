@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"io/ioutil"
+	"path/filepath"
 	"strings"
 
 	"github.com/hajimehoshi/ebiten"
@@ -84,9 +85,14 @@ type Tileset struct {
 	Tiledversion       string `xml:"tiledversion,attr"`
 }
 
-func (t *Tileset) LoadFromTsx() error {
+func (t *Tileset) LoadFromTsx(path string) error {
 	tsxFile := &TSXFile{}
-	data, error := ioutil.ReadFile(t.Source)
+	absTSXPath, error := filepath.Abs(filepath.Join(path, t.Source))
+	if error != nil {
+		return error
+	}
+
+	data, error := ioutil.ReadFile(absTSXPath)
 	if error != nil {
 		return error
 	}
@@ -99,13 +105,15 @@ func (t *Tileset) LoadFromTsx() error {
 	t.TileCount = tsxFile.TileCount
 	t.Columns = tsxFile.Columns
 
-	fmt.Printf("Loading image into ebiten.Image: %s\n", tsxFile.Image.Source)
-	t.TilesetEbitenImage, t.TilesetImage, error = ebitenutil.NewImageFromFile(tsxFile.Image.Source, ebiten.FilterDefault)
+	absImgPath, error := filepath.Abs(filepath.Join(filepath.Dir(absTSXPath), tsxFile.Image.Source))
+	if error != nil {
+	}
+
+	t.TilesetEbitenImage, t.TilesetImage, error = ebitenutil.NewImageFromFile(absImgPath, ebiten.FilterDefault)
 	if error != nil {
 		fmt.Printf("Failed loading texture: %s\n", error)
 		return error
 	}
-
 	return nil
 }
 
@@ -203,8 +211,8 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 			if newTile.GlobalTileID != 0 {
 				newTile.InternalTileID = newTile.GlobalTileID - newTile.Tileset.FirstGid
 
-				x0 := int(newTile.InternalTileID) * newTile.Tileset.TileWidth
-				y0 := int(newTile.InternalTileID) * newTile.Tileset.TileHeight
+				x0 := newTile.X * newTile.Tileset.TileWidth
+				y0 := newTile.Y * newTile.Tileset.TileHeight
 
 				// ToDo: Instead of saving the rectangle, build a list of all tile images in gameMap and reference the ebiten.Image here
 				newTile.TileRect = image.Rect(x0, y0, x0+newTile.Tileset.TileWidth, y0+newTile.Tileset.TileHeight)
@@ -314,17 +322,15 @@ func LoadFromFile(path string) (*TmxMap, error) {
 
 	_ = xml.Unmarshal([]byte(data), &gameMap)
 
-	for i, _ := range gameMap.Tilesets {
-		fmt.Printf("Loading TSX for Tileset: %s\t\t...", gameMap.Tilesets[i])
-		error = gameMap.Tilesets[i].LoadFromTsx()
+	for i := range gameMap.Tilesets {
+		error = gameMap.Tilesets[i].LoadFromTsx(filepath.Dir(path))
 		if error != nil {
 			fmt.Printf("Error! %s\n", error)
 			return nil, error
 		}
-		fmt.Printf("done\n\n")
 	}
 
-	for i, _ := range gameMap.Layers {
+	for i := range gameMap.Layers {
 		gameMap.Layers[i].DecodeData(gameMap)
 	}
 
