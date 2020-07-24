@@ -13,6 +13,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/ebitenutil"
+	"github.com/nfnt/resize"
 )
 
 // Valid orientation types of a map
@@ -225,7 +226,7 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 	return nil
 }
 
-func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle) *ebiten.Image {
+func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*ebiten.Image, error) {
 	width := camera.Max.X - camera.Min.X
 	height := camera.Max.Y - camera.Min.Y
 	rendered, _ := ebiten.NewImage(width, height, ebiten.FilterDefault)
@@ -244,7 +245,13 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle) *ebiten.Image {
 		}
 	}
 
-	return rendered
+	if scale == 1 {
+		return rendered, nil
+	} else {
+		newX := uint(float64(rendered.Bounds().Max.X) * scale)
+		newY := uint(float64(rendered.Bounds().Max.Y) * scale)
+		return ebiten.NewImageFromImage(resize.Resize(newX, newY, rendered, resize.Bicubic), ebiten.FilterDefault)
+	}
 }
 
 func getTileAbsolutePixelRectangle(tilePosition image.Point, layer Layer) image.Rectangle {
