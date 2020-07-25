@@ -230,7 +230,6 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*
 	rendered, _ := ebiten.NewImage(width, height, ebiten.FilterDefault)
 
 	visibleTiles := getTileRectangleFromAbsolutePixel(camera, l, gameMap.TileWidth, gameMap.TileHeight)
-	fmt.Printf("Visible Tiles: %s\n", visibleTiles)
 	xOffset := visibleTiles.Min.X*gameMap.TileWidth - camera.Min.X
 	yOffset := visibleTiles.Min.Y*gameMap.TileHeight - camera.Min.Y
 
@@ -238,10 +237,7 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*
 		if tile.X >= visibleTiles.Min.X && tile.X <= visibleTiles.Max.X &&
 			tile.Y >= visibleTiles.Min.Y && tile.Y <= visibleTiles.Max.Y {
 
-			fmt.Printf("Layer: %s, Tile: %d\n", l.Name, tile.InternalTileID)
-
 			op := &ebiten.DrawImageOptions{}
-			fmt.Printf("Tile position: [%d,%d]\n", xOffset+tile.X, yOffset+tile.Y)
 			op.GeoM.Translate(float64(xOffset+tile.X*gameMap.TileWidth), float64(yOffset+tile.Y*gameMap.TileHeight))
 			rendered.DrawImage(tile.Tileset.TilesetEbitenImage.SubImage(tile.TileRect).(*ebiten.Image), op)
 		}
@@ -252,7 +248,7 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*
 	} else {
 		newX := uint(float64(rendered.Bounds().Max.X) * scale)
 		newY := uint(float64(rendered.Bounds().Max.Y) * scale)
-		return ebiten.NewImageFromImage(resize.Resize(newX, newY, rendered, resize.Bicubic), ebiten.FilterDefault)
+		return ebiten.NewImageFromImage(resize.Resize(newX, newY, rendered, resize.NearestNeighbor), ebiten.FilterDefault)
 	}
 }
 
