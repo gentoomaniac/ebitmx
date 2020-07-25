@@ -112,8 +112,7 @@ func (t *Tileset) LoadFromTsx(path string) error {
 
 	t.TilesetEbitenImage, t.TilesetImage, error = ebitenutil.NewImageFromFile(absImgPath, ebiten.FilterDefault)
 	if error != nil {
-		fmt.Printf("Failed loading texture: %s\n", error)
-		return error
+		return fmt.Errorf("Failed loading texture: %s\n", error)
 	}
 	return nil
 }
@@ -187,29 +186,28 @@ type Layer struct {
 
 func (l *Layer) DecodeData(gameMap *TmxMap) error {
 	if l.Data.Encoding == Base64 {
-
 		byteArray, error := base64.StdEncoding.DecodeString(strings.TrimSpace(l.Data.Text))
 		if error != nil {
-			fmt.Printf("Error decoding data: %s", error)
-			return error
+			return fmt.Errorf("Error decoding data: %s", error)
 		}
 
 		tileNum := 0
 		for i := 0; i < len(byteArray)-4; i += 4 {
 			newTile := TileFromByteArray(byteArray[i : i+4])
-			for _, tileset := range gameMap.Tilesets {
-				if newTile.GlobalTileID >= tileset.FirstGid {
-					newTile.Tileset = &tileset
-				}
-			}
-			if newTile.Tileset == nil {
-				return fmt.Errorf("Couldn't find tileset for %s\n", newTile)
-			}
-
-			newTile.X = tileNum % gameMap.Width
-			newTile.Y = tileNum & gameMap.Height
 
 			if newTile.GlobalTileID != 0 {
+				for i := range gameMap.Tilesets {
+					if newTile.GlobalTileID >= gameMap.Tilesets[i].FirstGid {
+						newTile.Tileset = &gameMap.Tilesets[i]
+					}
+				}
+				if newTile.Tileset == nil {
+					return fmt.Errorf("Couldn't find tileset for %s\n", newTile)
+				}
+
+				newTile.X = tileNum % gameMap.Width
+				newTile.Y = tileNum & gameMap.Height
+
 				newTile.InternalTileID = newTile.GlobalTileID - newTile.Tileset.FirstGid
 
 				x0 := newTile.X * newTile.Tileset.TileWidth
@@ -332,7 +330,6 @@ func LoadFromFile(path string) (*TmxMap, error) {
 	for i := range gameMap.Tilesets {
 		error = gameMap.Tilesets[i].LoadFromTsx(filepath.Dir(path))
 		if error != nil {
-			fmt.Printf("Error! %s\n", error)
 			return nil, error
 		}
 	}
