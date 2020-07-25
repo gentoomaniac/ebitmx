@@ -288,7 +288,7 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) *e
 
 	return rendered
 }
-func (l Layer) RenderWHoleLayer(gameMap *TmxMap) *ebiten.Image {
+func (l Layer) RenderWholeLayer(gameMap *TmxMap) *ebiten.Image {
 	start := time.Now()
 
 	rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
@@ -393,7 +393,7 @@ func LoadFromFile(path string) (*TmxMap, error) {
 	}
 
 	gameMap.PixelWidth = gameMap.Width * gameMap.TileWidth
-	gameMap.PixelWidth = gameMap.Height * gameMap.TileHeight
+	gameMap.PixelHeight = gameMap.Height * gameMap.TileHeight
 
 	return gameMap, error
 }
