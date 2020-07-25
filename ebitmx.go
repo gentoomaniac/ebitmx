@@ -205,13 +205,13 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 					return fmt.Errorf("Couldn't find tileset for %s\n", newTile)
 				}
 
-				newTile.X = tileNum % gameMap.Width
-				newTile.Y = tileNum & gameMap.Height
+				newTile.X = tileNum % l.Width
+				newTile.Y = tileNum / l.Height
 
 				newTile.InternalTileID = newTile.GlobalTileID - newTile.Tileset.FirstGid
 
-				x0 := newTile.X * newTile.Tileset.TileWidth
-				y0 := newTile.Y * newTile.Tileset.TileHeight
+				x0 := (int(newTile.InternalTileID) % newTile.Tileset.Columns) * newTile.Tileset.TileWidth
+				y0 := (int(newTile.InternalTileID) / newTile.Tileset.Columns) * newTile.Tileset.TileWidth
 
 				// ToDo: Instead of saving the rectangle, build a list of all tile images in gameMap and reference the ebiten.Image here
 				newTile.TileRect = image.Rect(x0, y0, x0+newTile.Tileset.TileWidth, y0+newTile.Tileset.TileHeight)
@@ -229,7 +229,8 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*
 	height := camera.Max.Y - camera.Min.Y
 	rendered, _ := ebiten.NewImage(width, height, ebiten.FilterDefault)
 
-	visibleTiles := getTileRectangleFromAbsolutePixel(camera, l)
+	visibleTiles := getTileRectangleFromAbsolutePixel(camera, l, gameMap.TileWidth, gameMap.TileHeight)
+	fmt.Printf("Visible Tiles: %s\n", visibleTiles)
 	xOffset := visibleTiles.Min.X*gameMap.TileWidth - camera.Min.X
 	yOffset := visibleTiles.Min.Y*gameMap.TileHeight - camera.Min.Y
 
@@ -237,8 +238,11 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*
 		if tile.X >= visibleTiles.Min.X && tile.X <= visibleTiles.Max.X &&
 			tile.Y >= visibleTiles.Min.Y && tile.Y <= visibleTiles.Max.Y {
 
+			fmt.Printf("Layer: %s, Tile: %d\n", l.Name, tile.InternalTileID)
+
 			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(xOffset+tile.X*tile.Tileset.TileWidth), float64(yOffset+tile.Y*tile.Tileset.TileHeight))
+			fmt.Printf("Tile position: [%d,%d]\n", xOffset+tile.X, yOffset+tile.Y)
+			op.GeoM.Translate(float64(xOffset+tile.X*gameMap.TileWidth), float64(yOffset+tile.Y*gameMap.TileHeight))
 			rendered.DrawImage(tile.Tileset.TilesetEbitenImage.SubImage(tile.TileRect).(*ebiten.Image), op)
 		}
 	}
@@ -260,11 +264,11 @@ func getTileAbsolutePixelRectangle(tilePosition image.Point, layer Layer) image.
 	return image.Rect(x0, y0, x1, y1)
 }
 
-func getTileRectangleFromAbsolutePixel(rectangle image.Rectangle, layer Layer) image.Rectangle {
-	x0 := rectangle.Min.X / layer.Width
-	y0 := rectangle.Min.Y / layer.Height
-	x1 := rectangle.Max.X / layer.Width
-	y1 := rectangle.Max.Y / layer.Height
+func getTileRectangleFromAbsolutePixel(rectangle image.Rectangle, layer Layer, tileWidth int, tileHeight int) image.Rectangle {
+	x0 := rectangle.Min.X / tileWidth
+	y0 := rectangle.Min.Y / tileHeight
+	x1 := rectangle.Max.X / tileWidth
+	y1 := rectangle.Max.Y / tileHeight
 
 	if x0 < 0 {
 		x0 = 0
