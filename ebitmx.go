@@ -231,12 +231,20 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 	return nil
 }
 
-func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*ebiten.Image, error) {
+func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) *ebiten.Image {
 	start := time.Now()
 
-	width := camera.Max.X - camera.Min.X
-	height := camera.Max.Y - camera.Min.Y
-	rendered, _ := ebiten.NewImage(width, height, ebiten.FilterDefault)
+	camWidth := camera.Max.X - camera.Min.X
+	camHeight := camera.Max.Y - camera.Min.Y
+	widthDiff := int(float64(camWidth)/scale) - camWidth
+	heightDiff := int(float64(camHeight)/scale) - camHeight
+
+	//camera.Min.X -= widthDiff / 2
+	camera.Max.X += widthDiff
+	//camera.Min.Y -= heightDiff / 2
+	camera.Max.Y += heightDiff
+
+	rendered, _ := ebiten.NewImage(camWidth+widthDiff, camHeight+heightDiff, ebiten.FilterDefault)
 
 	visibleTiles := getTileRectangleFromAbsolutePixel(camera, l, gameMap.TileWidth, gameMap.TileHeight)
 	xOffset := visibleTiles.Min.X*gameMap.TileWidth - camera.Min.X
@@ -278,7 +286,24 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*
 	elapsed = t.Sub(start)
 	fmt.Printf("%s: rendering layer took %f\n", l.Name, elapsed.Seconds())
 
-	return rendered, nil
+	return rendered
+}
+func (l Layer) RenderWHoleLayer(gameMap *TmxMap) *ebiten.Image {
+	start := time.Now()
+
+	rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
+
+	for _, tile := range l.Tiles {
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(float64(tile.X*gameMap.TileWidth), float64(tile.Y*gameMap.TileHeight))
+		rendered.DrawImage(tile.Tileset.Tiles[int(tile.InternalTileID)], op)
+	}
+
+	t := time.Now()
+	elapsed := t.Sub(start)
+	fmt.Printf("%s: rendering layer took %f\n", l.Name, elapsed.Seconds())
+
+	return rendered
 }
 
 func getTileAbsolutePixelRectangle(tilePosition image.Point, layer Layer) image.Rectangle {
