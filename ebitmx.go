@@ -10,10 +10,10 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/ebitenutil"
-	"github.com/nfnt/resize"
 )
 
 // Valid orientation types of a map
@@ -84,6 +84,7 @@ type Tileset struct {
 	TilesetImage       image.Image
 	Version            string `xml:"version,attr"`
 	Tiledversion       string `xml:"tiledversion,attr"`
+	Tiles              map[int]*ebiten.Image
 }
 
 func (t *Tileset) LoadFromTsx(path string) error {
@@ -114,6 +115,19 @@ func (t *Tileset) LoadFromTsx(path string) error {
 	if error != nil {
 		return fmt.Errorf("Failed loading texture: %s\n", error)
 	}
+
+	fmt.Printf("Pre-loading all tiles from '%s'...\n", t.Name)
+	t.Tiles = make(map[int]*ebiten.Image)
+	tileNum := 0
+	for ; tileNum < t.TileCount; tileNum++ {
+		x0 := (tileNum % t.Columns) * t.TileWidth
+		y0 := (tileNum / t.Columns) * t.TileWidth
+
+		tileRectangle := image.Rect(x0, y0, x0+t.TileWidth, y0+t.TileHeight)
+		t.Tiles[tileNum] = t.TilesetEbitenImage.SubImage(tileRectangle).(*ebiten.Image)
+	}
+	fmt.Printf("%d tiles loaded.\n", tileNum)
+
 	return nil
 }
 
@@ -132,7 +146,6 @@ type Tile struct {
 	FlippedVertically   bool
 	FlippedDiagonally   bool
 	Tileset             *Tileset
-	TileRect            image.Rectangle
 }
 
 func TileFromByteArray(data []byte) *Tile {
@@ -209,12 +222,6 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 				newTile.Y = tileNum / l.Height
 
 				newTile.InternalTileID = newTile.GlobalTileID - newTile.Tileset.FirstGid
-
-				x0 := (int(newTile.InternalTileID) % newTile.Tileset.Columns) * newTile.Tileset.TileWidth
-				y0 := (int(newTile.InternalTileID) / newTile.Tileset.Columns) * newTile.Tileset.TileWidth
-
-				// ToDo: Instead of saving the rectangle, build a list of all tile images in gameMap and reference the ebiten.Image here
-				newTile.TileRect = image.Rect(x0, y0, x0+newTile.Tileset.TileWidth, y0+newTile.Tileset.TileHeight)
 				l.Tiles = append(l.Tiles, newTile)
 			}
 
@@ -225,6 +232,8 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 }
 
 func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*ebiten.Image, error) {
+	start := time.Now()
+
 	width := camera.Max.X - camera.Min.X
 	height := camera.Max.Y - camera.Min.Y
 	rendered, _ := ebiten.NewImage(width, height, ebiten.FilterDefault)
@@ -233,23 +242,43 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) (*
 	xOffset := visibleTiles.Min.X*gameMap.TileWidth - camera.Min.X
 	yOffset := visibleTiles.Min.Y*gameMap.TileHeight - camera.Min.Y
 
+	startDrawing := time.Now()
 	for _, tile := range l.Tiles {
 		if tile.X >= visibleTiles.Min.X && tile.X <= visibleTiles.Max.X &&
 			tile.Y >= visibleTiles.Min.Y && tile.Y <= visibleTiles.Max.Y {
 
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Translate(float64(xOffset+tile.X*gameMap.TileWidth), float64(yOffset+tile.Y*gameMap.TileHeight))
-			rendered.DrawImage(tile.Tileset.TilesetEbitenImage.SubImage(tile.TileRect).(*ebiten.Image), op)
+			rendered.DrawImage(tile.Tileset.Tiles[int(tile.InternalTileID)], op)
 		}
 	}
+	t := time.Now()
+	elapsed := t.Sub(startDrawing)
+	fmt.Printf("%s: drawing tiles took %f\n", l.Name, elapsed.Seconds())
 
-	if scale == 1 {
-		return rendered, nil
-	} else {
-		newX := uint(float64(rendered.Bounds().Max.X) * scale)
-		newY := uint(float64(rendered.Bounds().Max.Y) * scale)
-		return ebiten.NewImageFromImage(resize.Resize(newX, newY, rendered, resize.NearestNeighbor), ebiten.FilterDefault)
+	if scale != 1 {
+		startScaling := time.Now()
+
+		scaledWidth := int(float64(rendered.Bounds().Max.X) * scale)
+		scaledHeight := int(float64(rendered.Bounds().Max.Y) * scale)
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+
+		scaled, _ := ebiten.NewImage(scaledWidth, scaledHeight, ebiten.FilterDefault)
+		scaled.DrawImage(rendered, op)
+		rendered = scaled
+
+		t = time.Now()
+		elapsed = t.Sub(startScaling)
+		fmt.Printf("%s: scaling layer took %f\n", l.Name, elapsed.Seconds())
 	}
+
+	t = time.Now()
+	elapsed = t.Sub(start)
+	fmt.Printf("%s: rendering layer took %f\n", l.Name, elapsed.Seconds())
+
+	return rendered, nil
 }
 
 func getTileAbsolutePixelRectangle(tilePosition image.Point, layer Layer) image.Rectangle {
