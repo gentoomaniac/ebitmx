@@ -195,6 +195,7 @@ type Layer struct {
 		Encoding    DataEncoding `xml:"encoding,attr"`
 		Compression Compression  `xml:"compression,attr"`
 	} `xml:"data"`
+	Rendered *ebiten.Image
 }
 
 func (l *Layer) DecodeData(gameMap *TmxMap) error {
@@ -231,7 +232,7 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 	return nil
 }
 
-func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) *ebiten.Image {
+func (l Layer) RenderCam(gameMap *TmxMap, camera image.Rectangle, scale float64) *ebiten.Image {
 	start := time.Now()
 
 	camWidth := camera.Max.X - camera.Min.X
@@ -288,22 +289,40 @@ func (l Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64) *e
 
 	return rendered
 }
-func (l Layer) RenderWholeLayer(gameMap *TmxMap) *ebiten.Image {
-	start := time.Now()
-
-	rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
-
-	for _, tile := range l.Tiles {
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Translate(float64(tile.X*gameMap.TileWidth), float64(tile.Y*gameMap.TileHeight))
-		rendered.DrawImage(tile.Tileset.Tiles[int(tile.InternalTileID)], op)
+func (l *Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64, refresh bool) *ebiten.Image {
+	if l.Rendered == nil || refresh {
+		renderStart := time.Now()
+		rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
+		for _, tile := range l.Tiles {
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate(float64(tile.X*gameMap.TileWidth), float64(tile.Y*gameMap.TileHeight))
+			rendered.DrawImage(tile.Tileset.Tiles[int(tile.InternalTileID)], op)
+		}
+		l.Rendered = rendered
+		t := time.Now()
+		elapsed := t.Sub(renderStart)
+		fmt.Printf("%s: refreshing layer took %f\n", l.Name, elapsed.Seconds())
 	}
 
-	t := time.Now()
-	elapsed := t.Sub(start)
-	fmt.Printf("%s: rendering layer took %f\n", l.Name, elapsed.Seconds())
+	camWidth := camera.Max.X - camera.Min.X
+	camHeight := camera.Max.Y - camera.Min.Y
+	widthDiff := int(float64(camWidth)/scale) - camWidth
+	heightDiff := int(float64(camHeight)/scale) - camHeight
 
-	return rendered
+	upscaledCam := camera
+	//camera.Min.X -= widthDiff / 2
+	upscaledCam.Max.X += widthDiff
+	//camera.Min.Y -= heightDiff / 2
+	upscaledCam.Max.Y += heightDiff
+
+	op := &ebiten.DrawImageOptions{}
+	//op.GeoM.Scale(scale, scale)
+	op.GeoM.Translate(0, 0)
+
+	scaled, _ := ebiten.NewImage(camWidth+widthDiff, camHeight+widthDiff, ebiten.FilterDefault)
+	scaled.DrawImage(l.Rendered.SubImage(upscaledCam).(*ebiten.Image), op)
+
+	return scaled
 }
 
 func getTileAbsolutePixelRectangle(tilePosition image.Point, layer Layer) image.Rectangle {
