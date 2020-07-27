@@ -289,7 +289,7 @@ func (l Layer) RenderCam(gameMap *TmxMap, camera image.Rectangle, scale float64)
 
 	return rendered
 }
-func (l *Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64, refresh bool) *ebiten.Image {
+func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Image {
 	if l.Rendered == nil || refresh {
 		renderStart := time.Now()
 		rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
@@ -304,25 +304,16 @@ func (l *Layer) Render(gameMap *TmxMap, camera image.Rectangle, scale float64, r
 		fmt.Printf("%s: refreshing layer took %f\n", l.Name, elapsed.Seconds())
 	}
 
-	camWidth := camera.Max.X - camera.Min.X
-	camHeight := camera.Max.Y - camera.Min.Y
-	widthDiff := int(float64(camWidth)/scale) - camWidth
-	heightDiff := int(float64(camHeight)/scale) - camHeight
+	upscaledWidth := int(float64(gameMap.CameraBounds.Max.X) / scale)
+	upscaledHeight := int(float64(gameMap.CameraBounds.Max.Y) / scale)
 
-	upscaledCam := camera
-	//camera.Min.X -= widthDiff / 2
-	upscaledCam.Max.X += widthDiff
-	//camera.Min.Y -= heightDiff / 2
-	upscaledCam.Max.Y += heightDiff
+	upscaledCam := image.Rectangle{}
+	upscaledCam.Min.X = gameMap.CameraPosition.X - upscaledWidth/2
+	upscaledCam.Min.Y = gameMap.CameraPosition.Y - upscaledHeight/2
+	upscaledCam.Max.X = upscaledCam.Min.X + upscaledWidth
+	upscaledCam.Max.Y = upscaledCam.Min.Y + upscaledHeight
 
-	op := &ebiten.DrawImageOptions{}
-	//op.GeoM.Scale(scale, scale)
-	op.GeoM.Translate(0, 0)
-
-	scaled, _ := ebiten.NewImage(camWidth+widthDiff, camHeight+widthDiff, ebiten.FilterDefault)
-	scaled.DrawImage(l.Rendered.SubImage(upscaledCam).(*ebiten.Image), op)
-
-	return scaled
+	return l.Rendered.SubImage(upscaledCam).(*ebiten.Image)
 }
 
 func getTileAbsolutePixelRectangle(tilePosition image.Point, layer Layer) image.Rectangle {
@@ -388,6 +379,8 @@ type TmxMap struct {
 	NextObjectID     int       `xml:"nextobjectid,attr"`
 	Tilesets         []Tileset `xml:"tileset"`
 	Layers           []Layer   `xml:"layer"`
+	CameraPosition   image.Point
+	CameraBounds     image.Rectangle
 }
 
 func LoadFromFile(path string) (*TmxMap, error) {
