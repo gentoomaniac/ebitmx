@@ -206,7 +206,7 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 		}
 
 		tileNum := 0
-		for i := 0; i < len(byteArray)-4; i += 4 {
+		for i := 0; i <= len(byteArray)-4; i += 4 {
 			newTile := TileFromByteArray(byteArray[i : i+4])
 
 			if newTile.GlobalTileID != 0 {
