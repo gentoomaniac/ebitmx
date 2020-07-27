@@ -232,63 +232,6 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 	return nil
 }
 
-func (l Layer) RenderCam(gameMap *TmxMap, camera image.Rectangle, scale float64) *ebiten.Image {
-	start := time.Now()
-
-	camWidth := camera.Max.X - camera.Min.X
-	camHeight := camera.Max.Y - camera.Min.Y
-	widthDiff := int(float64(camWidth)/scale) - camWidth
-	heightDiff := int(float64(camHeight)/scale) - camHeight
-
-	//camera.Min.X -= widthDiff / 2
-	camera.Max.X += widthDiff
-	//camera.Min.Y -= heightDiff / 2
-	camera.Max.Y += heightDiff
-
-	rendered, _ := ebiten.NewImage(camWidth+widthDiff, camHeight+heightDiff, ebiten.FilterDefault)
-
-	visibleTiles := getTileRectangleFromAbsolutePixel(camera, l, gameMap.TileWidth, gameMap.TileHeight)
-	xOffset := visibleTiles.Min.X*gameMap.TileWidth - camera.Min.X
-	yOffset := visibleTiles.Min.Y*gameMap.TileHeight - camera.Min.Y
-
-	startDrawing := time.Now()
-	for _, tile := range l.Tiles {
-		if tile.X >= visibleTiles.Min.X && tile.X <= visibleTiles.Max.X &&
-			tile.Y >= visibleTiles.Min.Y && tile.Y <= visibleTiles.Max.Y {
-
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Translate(float64(xOffset+tile.X*gameMap.TileWidth), float64(yOffset+tile.Y*gameMap.TileHeight))
-			rendered.DrawImage(tile.Tileset.Tiles[int(tile.InternalTileID)], op)
-		}
-	}
-	t := time.Now()
-	elapsed := t.Sub(startDrawing)
-	fmt.Printf("%s: drawing tiles took %f\n", l.Name, elapsed.Seconds())
-
-	if scale != 1 {
-		startScaling := time.Now()
-
-		scaledWidth := int(float64(rendered.Bounds().Max.X) * scale)
-		scaledHeight := int(float64(rendered.Bounds().Max.Y) * scale)
-
-		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(scale, scale)
-
-		scaled, _ := ebiten.NewImage(scaledWidth, scaledHeight, ebiten.FilterDefault)
-		scaled.DrawImage(rendered, op)
-		rendered = scaled
-
-		t = time.Now()
-		elapsed = t.Sub(startScaling)
-		fmt.Printf("%s: scaling layer took %f\n", l.Name, elapsed.Seconds())
-	}
-
-	t = time.Now()
-	elapsed = t.Sub(start)
-	fmt.Printf("%s: rendering layer took %f\n", l.Name, elapsed.Seconds())
-
-	return rendered
-}
 func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Image {
 	if l.Rendered == nil || refresh {
 		renderStart := time.Now()
