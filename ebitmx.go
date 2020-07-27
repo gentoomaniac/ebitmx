@@ -259,47 +259,6 @@ func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Ima
 	return l.Rendered.SubImage(upscaledCam).(*ebiten.Image)
 }
 
-func getTileAbsolutePixelRectangle(tilePosition image.Point, layer Layer) image.Rectangle {
-	x0 := tilePosition.X * layer.Width
-	x1 := tilePosition.X * (layer.Width + 1)
-	y0 := tilePosition.Y * layer.Height
-	y1 := tilePosition.Y * (layer.Height + 1)
-	return image.Rect(x0, y0, x1, y1)
-}
-
-func getTileRectangleFromAbsolutePixel(rectangle image.Rectangle, layer Layer, tileWidth int, tileHeight int) image.Rectangle {
-	x0 := rectangle.Min.X / tileWidth
-	y0 := rectangle.Min.Y / tileHeight
-	x1 := rectangle.Max.X / tileWidth
-	y1 := rectangle.Max.Y / tileHeight
-
-	if x0 < 0 {
-		x0 = 0
-	}
-	if x0 > layer.Width {
-		x0 = layer.Width
-	}
-	if y0 < 0 {
-		y0 = 0
-	}
-	if y0 > layer.Height {
-		y0 = layer.Height
-	}
-	if x1 < 0 {
-		x1 = 0
-	}
-	if x1 < layer.Width {
-		x1 = layer.Width
-	}
-	if y1 < 0 {
-		y1 = 0
-	}
-	if y1 < layer.Height {
-		y1 = layer.Height
-	}
-	return image.Rect(x0, y0, x1, y1)
-}
-
 type TmxMap struct {
 	XMLName          xml.Name    `xml:"map"`
 	Text             string      `xml:",chardata"`
