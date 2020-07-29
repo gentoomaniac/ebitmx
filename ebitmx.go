@@ -288,26 +288,32 @@ type TmxMap struct {
 func LoadFromFile(path string) (*TmxMap, error) {
 	gameMap := &TmxMap{}
 
-	data, error := ioutil.ReadFile(path)
-	if error != nil {
-		return gameMap, error
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return gameMap, err
 	}
 
-	_ = xml.Unmarshal([]byte(data), &gameMap)
+	err = xml.Unmarshal([]byte(data), &gameMap)
+	if err != nil {
+		return nil, fmt.Errorf("Failed decoding map data: %s", err)
+	}
 
 	for i := range gameMap.Tilesets {
-		error = gameMap.Tilesets[i].LoadFromTsx(filepath.Dir(path))
-		if error != nil {
-			return nil, error
+		err := gameMap.Tilesets[i].LoadFromTsx(filepath.Dir(path))
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	for i := range gameMap.Layers {
-		gameMap.Layers[i].DecodeData(gameMap)
+		err := gameMap.Layers[i].DecodeData(gameMap)
+		if err != nil {
+			return nil, fmt.Errorf("Error decoding map layer %d, '%s': %s", i, gameMap.Layers[i].Name, err)
+		}
 	}
 
 	gameMap.PixelWidth = gameMap.Width * gameMap.TileWidth
 	gameMap.PixelHeight = gameMap.Height * gameMap.TileHeight
 
-	return gameMap, error
+	return gameMap, nil
 }
