@@ -212,7 +212,7 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 			if newTile.GlobalTileID != 0 {
 				for i := range gameMap.Tilesets {
 					if newTile.GlobalTileID >= gameMap.Tilesets[i].FirstGid {
-						newTile.Tileset = &gameMap.Tilesets[i]
+						newTile.Tileset = gameMap.Tilesets[i]
 					}
 				}
 				if newTile.Tileset == nil {
@@ -259,6 +259,46 @@ func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Ima
 	return l.Rendered.SubImage(upscaledCam).(*ebiten.Image)
 }
 
+type Object struct {
+	Text     string  `xml:",chardata"`
+	ID       int     `xml:"id,attr"`
+	Name     string  `xml:"name,attr"`
+	Type     string  `xml:"type,attr"`
+	X        int     `xml:"x,attr"`
+	Y        int     `xml:"y,attr"`
+	Width    int     `xml:"width,attr"`
+	Height   int     `xml:"height,attr"`
+	Rotation float64 `xml:"rotation,attr"`
+	Gid      uint32  `xml:"gid,attr"`
+	Visible  bool    `xml:"visible,attr"`
+	Template string  `xml:"template,attr"`
+}
+
+type DrawOrder string
+
+const (
+	Index   DrawOrder = "index"
+	TopDown           = "topdown"
+)
+
+type ObjectGroup struct {
+	Text      string    `xml:",chardata"`
+	ID        int       `xml:"id,attr"`
+	Name      string    `xml:"name,attr"`
+	Color     string    `xml:"color,attr"`
+	X         int       `xml:"x,attr"`
+	Y         int       `xml:"y,attr"`
+	Width     int       `xml:"width,attr"`
+	Height    int       `xml:"height,attr"`
+	Opacity   float64   `xml:"opacity,attr"`
+	Visible   bool      `xml:"visible,attr"`
+	Tintcolor string    `xml:"tintcolor,attr"`
+	Offsetx   bool      `xml:"offsetx,attr"`
+	OffsetY   bool      `xml:"offsety,attr"`
+	DrawOrder DrawOrder `xml:"draworder,attr"`
+	Objects   []*Object `xml:"object"`
+}
+
 type TmxMap struct {
 	XMLName          xml.Name    `xml:"map"`
 	Text             string      `xml:",chardata"`
@@ -271,18 +311,42 @@ type TmxMap struct {
 	Height           int         `xml:"height,attr"`
 	PixelWidth       int
 	PixelHeight      int
-	TileWidth        int       `xml:"tilewidth,attr"`
-	TileHeight       int       `xml:"tileheight,attr"`
-	HexSideLength    int       `xml:"hexsidelength,attr"`
-	StaggerAxis      int       `xml:"staggeraxis,attr"`
-	BackgroundColor  string    `xml:"backgroundcolor,attr"`
-	Infinite         int       `xml:"infinite,attr"`
-	NextLayerID      int       `xml:"nextlayerid,attr"`
-	NextObjectID     int       `xml:"nextobjectid,attr"`
-	Tilesets         []Tileset `xml:"tileset"`
-	Layers           []Layer   `xml:"layer"`
+	TileWidth        int            `xml:"tilewidth,attr"`
+	TileHeight       int            `xml:"tileheight,attr"`
+	HexSideLength    int            `xml:"hexsidelength,attr"`
+	StaggerAxis      int            `xml:"staggeraxis,attr"`
+	BackgroundColor  string         `xml:"backgroundcolor,attr"`
+	Infinite         int            `xml:"infinite,attr"`
+	NextLayerID      int            `xml:"nextlayerid,attr"`
+	NextObjectID     int            `xml:"nextobjectid,attr"`
+	Tilesets         []*Tileset     `xml:"tileset"`
+	Layers           []*Layer       `xml:"layer"`
+	ObjectGroups     []*ObjectGroup `xml:"objectgroup"`
 	CameraPosition   image.Point
 	CameraBounds     image.Rectangle
+}
+
+func (t TmxMap) GetObjectGroupByName(name string) *ObjectGroup {
+	for i := range t.ObjectGroups {
+		if t.ObjectGroups[i].Name == name {
+			return t.ObjectGroups[i]
+		}
+	}
+	return nil
+}
+
+func (t TmxMap) CheckColision(subject image.Rectangle) bool {
+	collisionLayer := t.GetObjectGroupByName("collisionmap")
+
+	for _, object := range collisionLayer.Objects {
+		if subject.Min.X < object.X+object.Width &&
+			subject.Min.X+subject.Max.X > object.X &&
+			subject.Min.Y < object.Y+object.Height &&
+			subject.Min.Y+subject.Max.Y > object.Y {
+			return true
+		}
+	}
+	return false
 }
 
 func LoadFromFile(path string) (*TmxMap, error) {
@@ -310,6 +374,13 @@ func LoadFromFile(path string) (*TmxMap, error) {
 		if err != nil {
 			return nil, fmt.Errorf("Error decoding map layer %d, '%s': %s", i, gameMap.Layers[i].Name, err)
 		}
+	}
+
+	for _, og := range gameMap.ObjectGroups {
+		fmt.Printf("Objectgroup: '%s' with %d objects\n", og.Name, len(og.Objects))
+	}
+	for i, object := range gameMap.ObjectGroups[0].Objects {
+		fmt.Printf("Object #%d: %s [%d/%d, %d/%d]\n", i, object.Name, object.X, object.Y, object.Width, object.Height)
 	}
 
 	gameMap.PixelWidth = gameMap.Width * gameMap.TileWidth
