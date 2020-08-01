@@ -247,16 +247,15 @@ func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Ima
 		fmt.Printf("%s: refreshing layer took %f\n", l.Name, elapsed.Seconds())
 	}
 
-	upscaledWidth := int(float64(gameMap.CameraBounds.Max.X) / scale)
-	upscaledHeight := int(float64(gameMap.CameraBounds.Max.Y) / scale)
+	scaledWidth := int(float64(gameMap.CameraBounds.Max.X) / scale)
+	scaledHeight := int(float64(gameMap.CameraBounds.Max.Y) / scale)
 
-	upscaledCam := image.Rectangle{}
-	upscaledCam.Min.X = gameMap.CameraPosition.X - upscaledWidth/2
-	upscaledCam.Min.Y = gameMap.CameraPosition.Y - upscaledHeight/2
-	upscaledCam.Max.X = upscaledCam.Min.X + upscaledWidth
-	upscaledCam.Max.Y = upscaledCam.Min.Y + upscaledHeight
+	gameMap.ScaledCam.Min.X = gameMap.CameraPosition.X - scaledWidth/2
+	gameMap.ScaledCam.Min.Y = gameMap.CameraPosition.Y - scaledHeight/2
+	gameMap.ScaledCam.Max.X = gameMap.ScaledCam.Min.X + scaledWidth
+	gameMap.ScaledCam.Max.Y = gameMap.ScaledCam.Min.Y + scaledHeight
 
-	return l.Rendered.SubImage(upscaledCam).(*ebiten.Image)
+	return l.Rendered.SubImage(gameMap.ScaledCam).(*ebiten.Image)
 }
 
 type Object struct {
@@ -297,6 +296,36 @@ type ObjectGroup struct {
 	OffsetY   bool      `xml:"offsety,attr"`
 	DrawOrder DrawOrder `xml:"draworder,attr"`
 	Objects   []*Object `xml:"object"`
+	Rendered  *ebiten.Image
+}
+
+func (o *ObjectGroup) DebugRender(gameMap *TmxMap, scale float64) *ebiten.Image {
+	if o.Rendered == nil {
+		renderStart := time.Now()
+		rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
+		for _, obj := range o.Objects {
+			objImg, _ := ebiten.NewImage(obj.Width, obj.Height, ebiten.FilterDefault)
+			objImg.Fill(image.Black)
+
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate(float64(obj.X), float64(obj.Y))
+			rendered.DrawImage(objImg, op)
+			fmt.Printf("Object: %s, [%d,%d],[%d,%d]\n", obj.Name, obj.X, obj.Y, obj.Width, obj.Height)
+		}
+		o.Rendered = rendered
+		t := time.Now()
+		elapsed := t.Sub(renderStart)
+		fmt.Printf("%s: refreshing layer took %f\n", o.Name, elapsed.Seconds())
+	}
+	scaledWidth := int(float64(gameMap.CameraBounds.Max.X) / scale)
+	scaledHeight := int(float64(gameMap.CameraBounds.Max.Y) / scale)
+
+	gameMap.ScaledCam.Min.X = gameMap.CameraPosition.X - scaledWidth/2
+	gameMap.ScaledCam.Min.Y = gameMap.CameraPosition.Y - scaledHeight/2
+	gameMap.ScaledCam.Max.X = gameMap.ScaledCam.Min.X + scaledWidth
+	gameMap.ScaledCam.Max.Y = gameMap.ScaledCam.Min.Y + scaledHeight
+
+	return o.Rendered.SubImage(gameMap.ScaledCam).(*ebiten.Image)
 }
 
 type TmxMap struct {
@@ -324,6 +353,7 @@ type TmxMap struct {
 	ObjectGroups     []*ObjectGroup `xml:"objectgroup"`
 	CameraPosition   image.Point
 	CameraBounds     image.Rectangle
+	ScaledCam        image.Rectangle
 }
 
 func (t TmxMap) GetObjectGroupByName(name string) *ObjectGroup {
@@ -332,6 +362,7 @@ func (t TmxMap) GetObjectGroupByName(name string) *ObjectGroup {
 			return t.ObjectGroups[i]
 		}
 	}
+	fmt.Printf("No layer with name '%s' found\n", name)
 	return nil
 }
 
@@ -343,6 +374,8 @@ func (t TmxMap) CheckColision(subject image.Rectangle) bool {
 			subject.Min.X+subject.Max.X > object.X &&
 			subject.Min.Y < object.Y+object.Height &&
 			subject.Min.Y+subject.Max.Y > object.Y {
+
+			fmt.Printf("Collision detected with %s [%d,%d][%d,%d]\n", object.Name, object.X, object.Y, object.Width, object.Height)
 			return true
 		}
 	}
