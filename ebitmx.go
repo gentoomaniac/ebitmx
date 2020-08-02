@@ -366,6 +366,21 @@ func (t TmxMap) GetObjectGroupByName(name string) *ObjectGroup {
 	return nil
 }
 
+func (t TmxMap) CheckColisionPoint(subject image.Point) bool {
+	collisionLayer := t.GetObjectGroupByName("collisionmap")
+
+	for _, object := range collisionLayer.Objects {
+		if subject.X >= object.X && subject.X <= object.X+object.Width &&
+			subject.Y >= object.Y && subject.Y <= object.Y+object.Height {
+
+			fmt.Printf("Collision detected with %s [%d,%d][%d,%d]\n", object.Name, object.X, object.Y, object.Width, object.Height)
+			fmt.Printf("Subject [%d,%d]\n", subject.X, subject.Y)
+			return true
+		}
+	}
+	return false
+}
+
 func (t TmxMap) CheckColision(subject image.Rectangle) bool {
 	collisionLayer := t.GetObjectGroupByName("collisionmap")
 
@@ -376,6 +391,7 @@ func (t TmxMap) CheckColision(subject image.Rectangle) bool {
 			subject.Min.Y+subject.Max.Y > object.Y {
 
 			fmt.Printf("Collision detected with %s [%d,%d][%d,%d]\n", object.Name, object.X, object.Y, object.Width, object.Height)
+			fmt.Printf("%s\n", subject)
 			return true
 		}
 	}
