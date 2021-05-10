@@ -5,7 +5,7 @@ package ebitmx
 import (
 	"encoding/base64"
 	"encoding/xml"
-	"fmt"
+	"errors"
 	"image"
 	"io/ioutil"
 	"path/filepath"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten"
 	"github.com/hajimehoshi/ebiten/ebitenutil"
+	"github.com/rs/zerolog/log"
 )
 
 // Valid orientation types of a map
@@ -89,9 +90,9 @@ type Tileset struct {
 
 func (t *Tileset) LoadFromTsx(path string) error {
 	tsxFile := &TSXFile{}
-	absTSXPath, error := filepath.Abs(filepath.Join(path, t.Source))
-	if error != nil {
-		return error
+	absTSXPath, err := filepath.Abs(filepath.Join(path, t.Source))
+	if err != nil {
+		return err
 	}
 
 	data, error := ioutil.ReadFile(absTSXPath)
@@ -107,16 +108,17 @@ func (t *Tileset) LoadFromTsx(path string) error {
 	t.TileCount = tsxFile.TileCount
 	t.Columns = tsxFile.Columns
 
-	absImgPath, error := filepath.Abs(filepath.Join(filepath.Dir(absTSXPath), tsxFile.Image.Source))
-	if error != nil {
+	absImgPath, err := filepath.Abs(filepath.Join(filepath.Dir(absTSXPath), tsxFile.Image.Source))
+	if err != nil {
+		return err
 	}
 
-	t.TilesetEbitenImage, t.TilesetImage, error = ebitenutil.NewImageFromFile(absImgPath, ebiten.FilterDefault)
-	if error != nil {
-		return fmt.Errorf("Failed loading texture: %s\n", error)
+	t.TilesetEbitenImage, t.TilesetImage, err = ebitenutil.NewImageFromFile(absImgPath, ebiten.FilterDefault)
+	if err != nil {
+		return err
 	}
 
-	fmt.Printf("Pre-loading all tiles from '%s'...\n", t.Name)
+	log.Debug().Str("tileset", t.Name).Msg("pre-loading tiles")
 	t.Tiles = make(map[int]*ebiten.Image)
 	tileNum := 0
 	for ; tileNum < t.TileCount; tileNum++ {
@@ -126,7 +128,7 @@ func (t *Tileset) LoadFromTsx(path string) error {
 		tileRectangle := image.Rect(x0, y0, x0+t.TileWidth, y0+t.TileHeight)
 		t.Tiles[tileNum] = t.TilesetEbitenImage.SubImage(tileRectangle).(*ebiten.Image)
 	}
-	fmt.Printf("%d tiles loaded.\n", tileNum)
+	log.Debug().Int("numTiles", tileNum).Msg("tiles loaded")
 
 	return nil
 }
@@ -200,9 +202,9 @@ type Layer struct {
 
 func (l *Layer) DecodeData(gameMap *TmxMap) error {
 	if l.Data.Encoding == Base64 {
-		byteArray, error := base64.StdEncoding.DecodeString(strings.TrimSpace(l.Data.Text))
-		if error != nil {
-			return fmt.Errorf("Error decoding data: %s", error)
+		byteArray, err := base64.StdEncoding.DecodeString(strings.TrimSpace(l.Data.Text))
+		if err != nil {
+			return err
 		}
 
 		tileNum := 0
@@ -216,7 +218,7 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 					}
 				}
 				if newTile.Tileset == nil {
-					return fmt.Errorf("Couldn't find tileset for %s\n", newTile)
+					return errors.New("couldn't find tileset for " + newTile.Tileset.Source)
 				}
 
 				newTile.X = tileNum % l.Width
@@ -244,7 +246,7 @@ func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Ima
 		l.Rendered = rendered
 		t := time.Now()
 		elapsed := t.Sub(renderStart)
-		fmt.Printf("%s: refreshing layer took %f\n", l.Name, elapsed.Seconds())
+		log.Debug().Msgf("%s: refreshing layer took %f\n", l.Name, elapsed.Seconds())
 	}
 
 	scaledWidth := int(float64(gameMap.CameraBounds.Max.X) / scale)
@@ -256,6 +258,15 @@ func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Ima
 	gameMap.ScaledCam.Max.Y = gameMap.ScaledCam.Min.Y + scaledHeight
 
 	return l.Rendered.SubImage(gameMap.ScaledCam).(*ebiten.Image)
+}
+
+func (t TmxMap) GetLayerByName(name string) *Layer {
+	for i := range t.Layers {
+		if t.Layers[i].Name == name {
+			return t.Layers[i]
+		}
+	}
+	return nil
 }
 
 type Object struct {
@@ -310,12 +321,12 @@ func (o *ObjectGroup) DebugRender(gameMap *TmxMap, scale float64) *ebiten.Image 
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Translate(float64(obj.X), float64(obj.Y))
 			rendered.DrawImage(objImg, op)
-			fmt.Printf("Object: %s, [%d,%d],[%d,%d]\n", obj.Name, obj.X, obj.Y, obj.Width, obj.Height)
+			log.Debug().Msgf("Object: %s, [%d,%d],[%d,%d]\n", obj.Name, obj.X, obj.Y, obj.Width, obj.Height)
 		}
 		o.Rendered = rendered
 		t := time.Now()
 		elapsed := t.Sub(renderStart)
-		fmt.Printf("%s: refreshing layer took %f\n", o.Name, elapsed.Seconds())
+		log.Debug().Msgf("%s: refreshing layer took %f\n", o.Name, elapsed.Seconds())
 	}
 	scaledWidth := int(float64(gameMap.CameraBounds.Max.X) / scale)
 	scaledHeight := int(float64(gameMap.CameraBounds.Max.Y) / scale)
@@ -362,7 +373,6 @@ func (t TmxMap) GetObjectGroupByName(name string) *ObjectGroup {
 			return t.ObjectGroups[i]
 		}
 	}
-	fmt.Printf("No layer with name '%s' found\n", name)
 	return nil
 }
 
@@ -373,8 +383,6 @@ func (t TmxMap) CheckColisionPoint(subject image.Point) bool {
 		if subject.X >= object.X && subject.X <= object.X+object.Width &&
 			subject.Y >= object.Y && subject.Y <= object.Y+object.Height {
 
-			fmt.Printf("Collision detected with %s [%d,%d][%d,%d]\n", object.Name, object.X, object.Y, object.Width, object.Height)
-			fmt.Printf("Subject [%d,%d]\n", subject.X, subject.Y)
 			return true
 		}
 	}
@@ -390,8 +398,8 @@ func (t TmxMap) CheckColision(subject image.Rectangle) bool {
 			subject.Min.Y < object.Y+object.Height &&
 			subject.Min.Y+subject.Max.Y > object.Y {
 
-			fmt.Printf("Collision detected with %s [%d,%d][%d,%d]\n", object.Name, object.X, object.Y, object.Width, object.Height)
-			fmt.Printf("%s\n", subject)
+			log.Debug().Msgf("Collision detected with %s [%d,%d][%d,%d]\n", object.Name, object.X, object.Y, object.Width, object.Height)
+			log.Debug().Msgf("%s\n", subject)
 			return true
 		}
 	}
@@ -408,7 +416,7 @@ func LoadFromFile(path string) (*TmxMap, error) {
 
 	err = xml.Unmarshal([]byte(data), &gameMap)
 	if err != nil {
-		return nil, fmt.Errorf("Failed decoding map data: %s", err)
+		return nil, err
 	}
 
 	for i := range gameMap.Tilesets {
@@ -421,15 +429,15 @@ func LoadFromFile(path string) (*TmxMap, error) {
 	for i := range gameMap.Layers {
 		err := gameMap.Layers[i].DecodeData(gameMap)
 		if err != nil {
-			return nil, fmt.Errorf("Error decoding map layer %d, '%s': %s", i, gameMap.Layers[i].Name, err)
+			return nil, err
 		}
 	}
 
 	for _, og := range gameMap.ObjectGroups {
-		fmt.Printf("Objectgroup: '%s' with %d objects\n", og.Name, len(og.Objects))
+		log.Debug().Msgf("Objectgroup: '%s' with %d objects\n", og.Name, len(og.Objects))
 	}
 	for i, object := range gameMap.ObjectGroups[0].Objects {
-		fmt.Printf("Object #%d: %s [%d/%d, %d/%d]\n", i, object.Name, object.X, object.Y, object.Width, object.Height)
+		log.Debug().Msgf("Object #%d: %s [%d/%d, %d/%d]\n", i, object.Name, object.X, object.Y, object.Width, object.Height)
 	}
 
 	gameMap.PixelWidth = gameMap.Width * gameMap.TileWidth
