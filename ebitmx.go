@@ -236,10 +236,11 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 
 func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Image {
 	if l.Rendered == nil || refresh {
+		op := &ebiten.DrawImageOptions{}
 		renderStart := time.Now()
 		rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
 		for _, tile := range l.Tiles {
-			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Reset()
 			op.GeoM.Translate(float64(tile.X*gameMap.TileWidth), float64(tile.Y*gameMap.TileHeight))
 			rendered.DrawImage(tile.Tileset.Tiles[int(tile.InternalTileID)], op)
 		}
@@ -314,11 +315,12 @@ func (o *ObjectGroup) DebugRender(gameMap *TmxMap, scale float64) *ebiten.Image 
 	if o.Rendered == nil {
 		renderStart := time.Now()
 		rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
+		op := &ebiten.DrawImageOptions{}
 		for _, obj := range o.Objects {
 			objImg, _ := ebiten.NewImage(obj.Width, obj.Height, ebiten.FilterDefault)
 			objImg.Fill(image.Black)
 
-			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Reset()
 			op.GeoM.Translate(float64(obj.X), float64(obj.Y))
 			rendered.DrawImage(objImg, op)
 			log.Debug().Msgf("Object: %s, [%d,%d],[%d,%d]\n", obj.Name, obj.X, obj.Y, obj.Width, obj.Height)
