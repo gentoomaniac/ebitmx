@@ -208,6 +208,7 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 		}
 
 		tileNum := 0
+		l.Tiles = make([]*Tile, l.Width*l.Height)
 		for i := 0; i <= len(byteArray)-4; i += 4 {
 			newTile := TileFromByteArray(byteArray[i : i+4])
 
@@ -225,7 +226,7 @@ func (l *Layer) DecodeData(gameMap *TmxMap) error {
 				newTile.Y = tileNum / l.Height
 
 				newTile.InternalTileID = newTile.GlobalTileID - newTile.Tileset.FirstGid
-				l.Tiles = append(l.Tiles, newTile)
+				l.Tiles[i] = newTile
 			}
 
 			tileNum++
