@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hajimehoshi/ebiten"
-	"github.com/hajimehoshi/ebiten/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -113,7 +113,7 @@ func (t *Tileset) LoadFromTsx(path string) error {
 		return err
 	}
 
-	t.TilesetEbitenImage, t.TilesetImage, err = ebitenutil.NewImageFromFile(absImgPath, ebiten.FilterDefault)
+	t.TilesetEbitenImage, t.TilesetImage, err = ebitenutil.NewImageFromFile(absImgPath)
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (l *Layer) Render(gameMap *TmxMap, scale float64, refresh bool) *ebiten.Ima
 	if l.Rendered == nil || refresh {
 		op := &ebiten.DrawImageOptions{}
 		renderStart := time.Now()
-		rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
+		rendered := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight)
 		for _, tile := range l.Tiles {
 			op.GeoM.Reset()
 			op.GeoM.Translate(float64(tile.X*gameMap.TileWidth), float64(tile.Y*gameMap.TileHeight))
@@ -314,10 +314,10 @@ type ObjectGroup struct {
 func (o *ObjectGroup) DebugRender(gameMap *TmxMap, scale float64) *ebiten.Image {
 	if o.Rendered == nil {
 		renderStart := time.Now()
-		rendered, _ := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight, ebiten.FilterDefault)
+		rendered := ebiten.NewImage(gameMap.PixelWidth, gameMap.PixelHeight)
 		op := &ebiten.DrawImageOptions{}
 		for _, obj := range o.Objects {
-			objImg, _ := ebiten.NewImage(obj.Width, obj.Height, ebiten.FilterDefault)
+			objImg := ebiten.NewImage(obj.Width, obj.Height)
 			objImg.Fill(image.Black)
 
 			op.GeoM.Reset()
